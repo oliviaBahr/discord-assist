@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
 	"log"
-	"os"
 
 	"discord-assist/internal/bot"
 	"discord-assist/internal/config"
+	"discord-assist/internal/menubar"
 )
 
 func main() {
@@ -22,13 +21,9 @@ func main() {
 		log.Fatalf("Failed to create bot: %v", err)
 	}
 
-	// Create context
-	ctx := context.Background()
+	// Create menu bar
+	menuBar := menubar.New(b, b.Logger())
 
-	// Start the bot
-	if err := b.Start(ctx); err != nil {
-		log.Fatalf("Failed to start bot: %v", err)
-	}
-
-	os.Exit(0)
-} 
+	// Run the menu bar (this will start the bot automatically)
+	menuBar.Run()
+}

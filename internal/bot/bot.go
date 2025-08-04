@@ -18,10 +18,11 @@ import (
 
 // Bot represents the main bot instance
 type Bot struct {
-	config *config.Config
-	client *discord.Client
-	ai     *ai.Service
-	logger *slog.Logger
+	config  *config.Config
+	client  *discord.Client
+	ai      *ai.Service
+	logger  *slog.Logger
+	running bool
 }
 
 // New creates a new bot instance
@@ -57,9 +58,11 @@ func New(cfg *config.Config) (*Bot, error) {
 // Start starts the bot
 func (b *Bot) Start(ctx context.Context) error {
 	b.logger.Info("starting Discord bot...")
+	b.running = true
 
 	// Connect to Discord
 	if err := b.client.Connect(ctx); err != nil {
+		b.running = false
 		return fmt.Errorf("failed to connect to Discord: %w", err)
 	}
 
@@ -84,6 +87,7 @@ func (b *Bot) Start(ctx context.Context) error {
 // Stop stops the bot gracefully
 func (b *Bot) Stop() error {
 	b.logger.Info("stopping bot...")
+	b.running = false
 
 	if err := b.client.Close(); err != nil {
 		b.logger.Error("error closing Discord connection", "error", err)
@@ -92,6 +96,16 @@ func (b *Bot) Stop() error {
 
 	b.logger.Info("bot stopped successfully")
 	return nil
+}
+
+// IsRunning returns whether the bot is currently running
+func (b *Bot) IsRunning() bool {
+	return b.running
+}
+
+// Logger returns the bot's logger
+func (b *Bot) Logger() *slog.Logger {
+	return b.logger
 }
 
 // setupEventHandlers sets up all event handlers
