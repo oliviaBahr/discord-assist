@@ -3,17 +3,16 @@ package bot
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/charmbracelet/log"
 
 	"discord-assist/internal/ai"
 	"discord-assist/internal/config"
 	"discord-assist/internal/discord"
-	"discord-assist/pkg/logger"
 )
 
 // Bot represents the main bot instance
@@ -21,23 +20,33 @@ type Bot struct {
 	config  *config.Config
 	client  *discord.Client
 	ai      *ai.Service
-	logger  *slog.Logger
+	logger  *log.Logger
 	running bool
 }
 
 // New creates a new bot instance
 func New(cfg *config.Config) (*Bot, error) {
 	// Set up logger
-	log := logger.Setup(cfg.Logging.Level, cfg.Logging.Format)
+	logger := log.NewWithOptions(os.Stderr, log.Options{
+		ReportCaller: true,
+		Level:        log.DebugLevel,
+	})
 
 	// Create Discord client
-	client, err := discord.NewClient(cfg.Discord.Token, log)
+	client, err := discord.NewClient(cfg.Discord.Token, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Discord client: %w", err)
 	}
 
 	// Create AI service
-	aiService, err := ai.NewService(cfg.Anthropic.APIKey, cfg.Anthropic.Model, log)
+	sendDiscordMessage := func(channelID, content string) {
+		_, err := client.Session().ChannelMessageSend(channelID, content)
+		if err != nil {
+			logger.Error("failed to send Discord message", "channelID", channelID, "error", err)
+		}
+	}
+
+	aiService, err := ai.NewService(cfg.Anthropic.APIKey, cfg.Anthropic.Model, logger, sendDiscordMessage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AI service: %w", err)
 	}
@@ -46,7 +55,7 @@ func New(cfg *config.Config) (*Bot, error) {
 		config: cfg,
 		client: client,
 		ai:     aiService,
-		logger: log,
+		logger: logger,
 	}
 
 	// Set up event handlers
@@ -104,7 +113,7 @@ func (b *Bot) IsRunning() bool {
 }
 
 // Logger returns the bot's logger
-func (b *Bot) Logger() *slog.Logger {
+func (b *Bot) Logger() *log.Logger {
 	return b.logger
 }
 
@@ -129,15 +138,25 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		"channel", m.ChannelID,
 	)
 
-	// Generate AI response
-	response, err := b.ai.GenerateResponse(context.Background(), m.Content, m.Author.Username)
+	// Get the last 5 messages from the channel
+	recentMessages, err := b.client.GetRecentMessages(m.ChannelID, 5)
+	if err != nil {
+		b.logger.Error("failed to fetch recent messages", "error", err)
+		// Fallback to just the current message
+		recentMessages = []*discordgo.Message{m.Message}
+	}
+
+	// Generate AI response with conversation context
+	response, err := b.ai.GenerateResponse(context.Background(), recentMessages)
 	if err != nil {
 		b.logger.Error("failed to generate AI response", "error", err)
 		response = "I'm sorry, I'm having trouble processing your message right now. 😅"
 	}
 
-	// Send the response
-	if err := b.client.SendMessage(m.ChannelID, response); err != nil {
-		b.logger.Error("failed to send AI response", "error", err)
+	// Send the response (only if there's a response to send)
+	if response != "" {
+		if err := b.client.SendMessage(m.ChannelID, response); err != nil {
+			b.logger.Error("failed to send AI response", "error", err)
+		}
 	}
 }

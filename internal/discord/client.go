@@ -3,19 +3,19 @@ package discord
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/charmbracelet/log"
 )
 
 // Client wraps the Discord session and provides additional functionality
 type Client struct {
 	session *discordgo.Session
-	logger  *slog.Logger
+	logger  *log.Logger
 }
 
 // NewClient creates a new Discord client
-func NewClient(token string, logger *slog.Logger) (*Client, error) {
+func NewClient(token string, logger *log.Logger) (*Client, error) {
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Discord session: %w", err)
@@ -112,4 +112,13 @@ func (c *Client) SendEmbed(channelID string, embed *discordgo.MessageEmbed) erro
 		return fmt.Errorf("failed to send embed: %w", err)
 	}
 	return nil
+}
+
+// GetRecentMessages fetches the last N messages from a channel
+func (c *Client) GetRecentMessages(channelID string, limit int) ([]*discordgo.Message, error) {
+	messages, err := c.session.ChannelMessages(channelID, limit, "", "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch recent messages: %w", err)
+	}
+	return messages, nil
 }

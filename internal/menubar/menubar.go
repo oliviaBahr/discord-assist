@@ -2,15 +2,15 @@ package menubar
 
 import (
 	"context"
-	"log/slog"
 	"os"
 
+	"github.com/charmbracelet/log"
 	"github.com/getlantern/systray"
 )
 
 // MenuBar represents the system tray menu bar
 type MenuBar struct {
-	logger *slog.Logger
+	logger *log.Logger
 	bot    BotController
 }
 
@@ -22,7 +22,7 @@ type BotController interface {
 }
 
 // New creates a new menu bar instance
-func New(bot BotController, logger *slog.Logger) *MenuBar {
+func New(bot BotController, logger *log.Logger) *MenuBar {
 	return &MenuBar{
 		logger: logger,
 		bot:    bot,
